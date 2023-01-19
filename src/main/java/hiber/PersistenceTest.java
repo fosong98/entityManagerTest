@@ -1,3 +1,6 @@
+package hiber;
+
+import boot.entity.Member;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
@@ -5,8 +8,9 @@ import jakarta.persistence.Persistence;
 import java.util.concurrent.CountDownLatch;
 
 public class PersistenceTest extends Thread {
-    private static EntityManagerFactory emf;
     private int id;
+    private static int memberId0CodeInMain;
+    private static EntityManagerFactory emf;
 
     private static StringBuffer sb;
 
@@ -19,9 +23,25 @@ public class PersistenceTest extends Thread {
     public static void main(String[] args) throws InterruptedException {
         emf = Persistence.createEntityManagerFactory("hello");
         sb = new StringBuffer();
-        cl = new CountDownLatch(100);
+        cl = new CountDownLatch(10);
 
-        for (int i = 0; i < 100; ++i) {
+        Member member = new Member();
+        member.setId(0L);
+
+        EntityManager em = emf.createEntityManager();
+        try {
+            em.getTransaction().begin();
+            em.persist(member);
+            Member findMember = em.find(Member.class, member.getId());
+            memberId0CodeInMain = findMember.hashCode();
+            em.getTransaction().commit();
+        } catch (Exception e) {
+            e.printStackTrace();
+            em.getTransaction().rollback();
+        }
+
+
+        for (int i = 0; i < 10; ++i) {
             PersistenceTest t = new PersistenceTest(i + 1);
             t.start();
         }
@@ -34,18 +54,18 @@ public class PersistenceTest extends Thread {
     @Override
     public void run() {
         EntityManager em = emf.createEntityManager();
-
         try {
             em.getTransaction().begin();
             Member member = new Member();
             member.setId((long) id);
 
             em.persist(member);
-            Member findMember = em.find(Member.class, member.getId());
+            Member findMember = em.find(Member.class, 0L);
 
             synchronized(sb) {
                 sb.append(String.format("=== <%d> ===\n", id));
-                sb.append(String.format("EM: %s, %s, %s\n", em, member, findMember));
+                sb.append(String.format("EM: %s(%d)\nMain:  %d\nThread: %d\n",
+                        em.getClass(), em.hashCode(), memberId0CodeInMain, findMember.hashCode()));
                 sb.append(String.format("==============\n"));
             };
 
